@@ -1,0 +1,140 @@
+---
+
+- name: upgrade all packages
+  yum:
+    name: '*'
+    state: latest
+
+- name: Load br_netfilter module
+  lineinfile:
+    path: /etc/modules-load.d/k8s.conf
+    line: br_netfilter
+    create: yes
+
+- name: ensure a list of packages installed
+  yum:
+    name: "{{ packages }}"
+  vars:
+    packages:
+    - yum-utils
+    - lvm2
+    - vim
+    - device-mapper-persistent-data
+
+
+
+- name: Disable SELinux
+  selinux:
+    policy: targeted
+    state: disabled
+
+
+- name: Disable SELINUX
+  shell: setenforce 0
+
+- name: swapoff 
+  shell: swapoff -a
+
+- name: Modprobe br_netfilter
+  modprobe:
+    name: br_netfilter
+    state: present
+
+- name: Set docket repo
+  shell: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+- name: yum clean all
+  shell: yum clean all
+
+- name: yum clean metadata
+  shell: yum clean metadata
+
+
+- name: Echo 1 into net.bridge.bridge-nf-call-iptables
+  sysctl:
+    name: net.bridge.bridge-nf-call-iptables
+    value: '1'
+    state: present
+
+- name: Echo 1 into net.bridge.bridge-nf-call-ip6tables
+  sysctl:
+    name: net.bridge.bridge-nf-call-ip6tables
+    value: '1'
+    state: present
+
+
+
+
+
+- name: Install docker packages
+  yum:
+    name: "{{ packages }}"
+  vars:
+    packages:
+    - docker-ce
+    - docker-ce-cli
+    - containerd.io
+
+
+- name: grep for ExecStart in /usr/lib/systemd/system/docker.service file
+  shell: grep -e "^ExecStart" /usr/lib/systemd/system/docker.service
+  register: docker_start_options
+
+
+- name: debug docker start options
+  debug: msg="{{docker_start_options}}"
+
+
+
+
+- name: Edit docker systemd unit file and add exec-opt native.cgroupdriver=systemd
+  replace:
+    path: /usr/lib/systemd/system/docker.service
+    regexp: "{{item}}"
+    replace: "{{item}} --exec-opt native.cgroupdriver=systemd"
+  with_items:
+      - "{{docker_start_options.stdout_lines}}"
+
+
+- name: Add kubernetes repository
+  yum_repository:
+    name: kubernetes
+    description: kubernetes
+    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
+    gpgcheck: yes
+    repo_gpgcheck: yes
+    enabled: yes
+    exclude: kubelet kubeadm kubectl
+    gpgkey:
+      - https://packages.cloud.google.com/yum/doc/yum-key.gpg 
+      - https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+
+- name: yum clean all again
+  shell: yum clean all
+
+- name: yum clean metadata again
+  shell: yum clean metadata
+
+
+- name: install kubelet kubeadm kubectl
+  shell: yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
+
+- name: Add cgroup-driver to /etc/sysconfig/kubelet
+  replace:
+    path: /etc/sysconfig/kubelet
+    regexp: '^KUBELET_EXTRA_ARGS='
+    replace: 'KUBELET_EXTRA_ARGS=--cgroup-driver=systemd'
+
+
+- name: start docker
+  systemd:
+    state: started
+    name: docker
+    enabled: True
+
+
+- name: enable kubelet
+  systemd:
+    state: stopped
+    name: kubelet
+    enabled: True

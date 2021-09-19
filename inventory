@@ -1,0 +1,9 @@
+[all:vars]
+ansible_ssh_common_args="-o StrictHostKeyChecking=no"
+
+[master]
+3.17.65.10
+
+[nodes]
+18.224.27.35
+3.139.90.189
