@@ -1,5 +1,29 @@
 ---
 
+- name: Set docker repo
+  shell: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+
+- name: Add kubernetes repository
+  yum_repository:
+    name: kubernetes
+    description: kubernetes
+    #baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
+    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+    gpgcheck: yes
+    repo_gpgcheck: false
+    enabled: yes
+    exclude: kubelet kubeadm kubectl
+    gpgkey:
+      - https://packages.cloud.google.com/yum/doc/yum-key.gpg 
+      - https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+
+- name: yum clean all again
+  shell: yum clean all
+
+- name: yum clean metadata again
+  shell: yum clean metadata
+
 - name: upgrade all packages
   yum:
     name: '*'
@@ -40,9 +64,6 @@
     name: br_netfilter
     state: present
 
-- name: Set docket repo
-  shell: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-
 - name: yum clean all
   shell: yum clean all
 
@@ -74,6 +95,7 @@
     - docker-ce
     - docker-ce-cli
     - containerd.io
+    - docker-compose-plugin
 
 
 - name: grep for ExecStart in /usr/lib/systemd/system/docker.service file
@@ -95,25 +117,6 @@
   with_items:
       - "{{docker_start_options.stdout_lines}}"
 
-
-- name: Add kubernetes repository
-  yum_repository:
-    name: kubernetes
-    description: kubernetes
-    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
-    gpgcheck: yes
-    repo_gpgcheck: yes
-    enabled: yes
-    exclude: kubelet kubeadm kubectl
-    gpgkey:
-      - https://packages.cloud.google.com/yum/doc/yum-key.gpg 
-      - https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-
-- name: yum clean all again
-  shell: yum clean all
-
-- name: yum clean metadata again
-  shell: yum clean metadata
 
 
 - name: install kubelet kubeadm kubectl
@@ -138,3 +141,22 @@
     state: stopped
     name: kubelet
     enabled: True
+
+- name: Set some default containerd config settings
+  shell: containerd config default | tee /etc/containerd/config.tom
+  ignore_errors: True
+
+- name: Restart containerd service
+  systemd:
+    state: restarted
+    name: containerd
+    enabled: True
+
+- name: Install development tools
+  shell: yum groupinstall "Development Tools" -y
+  ignore_errors: True
+
+
+- name: Install git make wget
+  shell: yum install -y git make wget
+  ignore_errors: True

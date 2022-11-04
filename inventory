@@ -2,8 +2,8 @@
 ansible_ssh_common_args="-o StrictHostKeyChecking=no"
 
 [master]
-3.17.65.10
+3.94.171.197
 
 [nodes]
-18.224.27.35
-3.139.90.189
+3.91.252.105
+44.211.130.25
